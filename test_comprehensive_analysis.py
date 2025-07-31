@@ -7,9 +7,13 @@ import os
 import asyncio
 
 # 백엔드 경로를 sys.path에 추가
-sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+backend_path = os.path.join(os.path.dirname(__file__), 'backend')
+sys.path.insert(0, backend_path)
 
-from backend.app.services.ai_analyzer import ai_analyzer
+# 현재 디렉토리도 추가 (config.py 접근용)
+sys.path.insert(0, os.path.dirname(__file__))
+
+from app.services.ai_analyzer import ai_analyzer
 
 async def test_comprehensive_analysis():
     """종합 분석 테스트"""
@@ -146,10 +150,21 @@ async def test_comprehensive_analysis():
             
         except Exception as e:
             print(f"❌ 분석 실패: {e}")
+            import traceback
+            traceback.print_exc()
         
         print()
 
 if __name__ == "__main__":
     print("종합 분석 기능 테스트 시작...")
-    asyncio.run(test_comprehensive_analysis())
-    print("테스트 완료!") 
+    print(f"Python path: {sys.path[:3]}")
+    
+    try:
+        asyncio.run(test_comprehensive_analysis())
+        print("테스트 완료!")
+    except KeyboardInterrupt:
+        print("\n테스트 중단됨")
+    except Exception as e:
+        print(f"테스트 실행 중 오류: {e}")
+        import traceback
+        traceback.print_exc() 
