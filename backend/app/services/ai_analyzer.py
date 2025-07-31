@@ -267,6 +267,86 @@ JSON 형식으로만 응답해주세요."""
                 "raw_response": f"Ollama 오류로 로컬 분석 사용: {str(e)}"
             }
     
+    async def analyze_with_lmstudio(self, text: str, user_intent: str, additional_context: str = "") -> Dict[str, Any]:
+        """LM Studio 로컬 AI를 이용한 분석 (OpenAI 호환 API)"""
+        try:
+            if not settings.LMSTUDIO_BASE_URL:
+                raise ValueError("LM Studio 설정이 없습니다")
+            
+            system_prompt = """당신은 문서 분석 전문가입니다. 주어진 문서를 분석하여 다음 정보를 제공해주세요:
+1. 문서 유형 (이력서, 사전과제, 포트폴리오 등)
+2. 주요 키워드 10개
+3. 주요 주제들
+4. 문서 요약
+5. 추천사항
+6. 면접 시 예상 질문 (사용자 의도가 면접 준비인 경우)
+
+응답은 반드시 JSON 형식으로 해주세요."""
+
+            user_prompt = f"""분석할 문서 내용:
+{text}
+
+사용자 의도: {user_intent}
+추가 컨텍스트: {additional_context}
+
+위 문서를 분석하여 다음 형식의 JSON으로 결과를 제공해주세요:
+{{
+    "document_type": "문서 유형",
+    "keywords": ["키워드1", "키워드2", ...],
+    "main_topics": ["주제1", "주제2", ...],
+    "summary": "문서 요약",
+    "recommendations": ["추천1", "추천2", ...],
+    "interview_questions": ["질문1", "질문2", ...]
+}}"""
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{settings.LMSTUDIO_BASE_URL}/v1/chat/completions",
+                    json={
+                        "model": settings.LMSTUDIO_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.7,
+                        "max_tokens": 2000,
+                        "stream": False
+                    },
+                    timeout=60.0
+                )
+            
+            if response.status_code == 200:
+                result_data = response.json()
+                result_text = result_data["choices"][0]["message"]["content"]
+                
+                try:
+                    # JSON 파싱 시도
+                    result = json.loads(result_text)
+                    result["analysis_method"] = "LM Studio 로컬 분석"
+                except json.JSONDecodeError:
+                    # JSON 파싱 실패 시 로컬 분석으로 fallback
+                    result = self.generate_local_analysis(text, user_intent)
+                    result["analysis_method"] = "로컬 분석 (LM Studio JSON 파싱 실패)"
+                
+                return {
+                    "ai_model": "lmstudio",
+                    "analysis": result,
+                    "raw_response": result_text
+                }
+            else:
+                raise Exception(f"LM Studio API 오류: {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"LM Studio 분석 중 오류: {e}")
+            # LM Studio 실패 시 로컬 분석으로 fallback
+            local_result = self.generate_local_analysis(text, user_intent)
+            local_result["analysis_method"] = "로컬 분석 (LM Studio 실패)"
+            return {
+                "ai_model": "local_fallback",
+                "analysis": local_result,
+                "raw_response": f"LM Studio 오류로 로컬 분석 사용: {str(e)}"
+            }
+    
     async def analyze_with_openai(self, text: str, user_intent: str, additional_context: str = "") -> Dict[str, Any]:
         """OpenAI를 이용한 문서 분석 (마스킹된 데이터)"""
         try:
@@ -462,6 +542,10 @@ JSON 형식으로만 응답해주세요."""
                 # Ollama 로컬 AI 분석
                 result = await self.analyze_with_ollama(combined_text, user_intent, additional_context)
                 
+            elif ai_model == "lmstudio":
+                # LM Studio 로컬 AI 분석
+                result = await self.analyze_with_lmstudio(combined_text, user_intent, additional_context)
+                
             elif ai_model in ["openai", "claude", "deepseek"]:
                 # 외부 AI 분석 (사용자 동의 필요)
                 result = await self.analyze_with_external_ai(
@@ -481,7 +565,7 @@ JSON 형식으로만 응답해주세요."""
             # 추가 분석 정보
             result["analysis"]["total_documents"] = len(texts)
             result["analysis"]["total_characters"] = len(combined_text)
-            result["analysis"]["security_level"] = "높음" if ai_model in ["local", "ollama"] else "주의"
+            result["analysis"]["security_level"] = "높음" if ai_model in ["local", "ollama", "lmstudio"] else "주의"
             
             return result
             

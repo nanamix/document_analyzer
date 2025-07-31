@@ -36,6 +36,10 @@ class Settings:
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama2")
     
+    # LM Studio 설정 (OpenAI 호환 API)
+    LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234")
+    LMSTUDIO_MODEL = os.getenv("LMSTUDIO_MODEL", "local-model")
+    
     # OCR Settings - macOS 기본값 (Homebrew 설치 기준)
     TESSERACT_CMD = os.getenv("TESSERACT_CMD", "/opt/homebrew/bin/tesseract")
     

@@ -129,6 +129,13 @@ const AnalysisModal = ({ visible, onCancel, documents, onSuccess }) => {
       security: 'high'
     },
     { 
+      value: 'lmstudio', 
+      label: '🏠 LM Studio (로컬 AI)', 
+      icon: '🖥️', 
+      description: '로컬 AI 모델 - OpenAI 호환 API',
+      security: 'high'
+    },
+    { 
       value: 'openai', 
       label: '⚠️ OpenAI GPT-4', 
       icon: '🌐', 
