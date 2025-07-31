@@ -783,11 +783,14 @@ JSON 형식으로만 응답해주세요."""
             # 문서 유형 분류
             doc_types = self._classify_document_types(texts)
             
+            # 텍스트 결합 (항상 정의)
+            combined_text = "\n\n=== 문서 구분 ===\n\n".join(texts)
+            
             # 면접 준비나 다중 문서인 경우 종합 분석 수행
             if user_intent == "면접 준비" or len(texts) > 1:
                 logger.info(f"🎯 종합 분석 시작: {len(texts)}개 문서, 유형: {doc_types}")
                 
-                # 🔒 보안 우선 분석 with 종합 분석
+                # 🔒 로컬 분석인 경우 종합 분석 사용
                 if ai_model == "local" or ai_model == "basic":
                     analysis_result = self._generate_comprehensive_analysis(texts, doc_types, user_intent)
                     result = {
@@ -795,14 +798,16 @@ JSON 형식으로만 응답해주세요."""
                         "analysis": analysis_result,
                         "raw_response": "종합 로컬 분석 수행"
                     }
+                    # 추가 분석 정보
+                    result["analysis"]["total_documents"] = len(texts)
+                    result["analysis"]["total_characters"] = len(combined_text)
+                    result["analysis"]["security_level"] = "높음"
+                    return result
                 else:
-                    # AI 모델 사용 시에도 종합 분석 프롬프트 적용
+                    # AI 모델 사용 시 종합 분석 프롬프트 적용
                     combined_text = self._create_structured_prompt(texts, doc_types, user_intent, additional_context)
-            else:
-                # 단일 문서 또는 기본 분석
-                combined_text = "\n\n=== 문서 구분 ===\n\n".join(texts)
             
-            # 🔒 보안 우선 분석 순서
+            # 🔒 AI 모델별 분석 수행
             if ai_model == "local" or ai_model == "basic":
                 # 로컬 분석 (가장 안전)
                 analysis_result = self.generate_local_analysis(combined_text, user_intent)
@@ -845,13 +850,29 @@ JSON 형식으로만 응답해주세요."""
             
         except Exception as e:
             logger.error(f"문서 분석 중 오류: {e}")
-            # 모든 실패 시 로컬 분석
-            analysis_result = self.generate_local_analysis(combined_text, user_intent)
-            return {
-                "ai_model": "local_emergency",
-                "analysis": analysis_result,
-                "raw_response": f"오류로 인한 로컬 분석: {str(e)}"
-            }
+            # 모든 실패 시 로컬 분석 (안전한 fallback)
+            try:
+                fallback_text = "\n\n=== 문서 구분 ===\n\n".join(texts)
+                analysis_result = self.generate_local_analysis(fallback_text, user_intent)
+                return {
+                    "ai_model": "local_emergency",
+                    "analysis": analysis_result,
+                    "raw_response": f"오류로 인한 로컬 분석: {str(e)}"
+                }
+            except Exception as fallback_error:
+                logger.error(f"Fallback 분석도 실패: {fallback_error}")
+                return {
+                    "ai_model": "error",
+                    "analysis": {
+                        "document_type": "분석 실패",
+                        "keywords": [],
+                        "main_topics": [],
+                        "summary": f"분석 중 오류가 발생했습니다: {str(e)}",
+                        "recommendations": ["나중에 다시 시도해주세요"],
+                        "interview_questions": []
+                    },
+                    "raw_response": f"완전 실패: {str(e)}"
+                }
 
 # 싱글톤 인스턴스
 ai_analyzer = AIAnalyzer() 
