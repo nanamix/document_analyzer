@@ -65,16 +65,25 @@ async def test_lmstudio_connection():
                 
                 # 3. 문서 분석 형식 테스트
                 print("\n3️⃣ 문서 분석 형식 테스트 중...")
-                analysis_prompt = """다음 텍스트를 분석하여 JSON 형식으로 응답해주세요:
+                system_prompt = """당신은 문서 분석 전문가입니다. 
+반드시 올바른 JSON 형식으로만 응답해야 합니다. 
+추가 설명이나 마크다운 형식 없이 순수한 JSON만 출력하세요.
 
-텍스트: "저는 컴퓨터 과학을 전공한 개발자입니다. Python과 JavaScript에 능숙하며, 웹 개발 경험이 3년 있습니다."
+IMPORTANT: 응답에는 JSON 이외의 다른 텍스트를 포함하지 마세요."""
 
-다음 형식으로 응답해주세요:
+                user_prompt = """다음 문서를 분석하고 JSON 형식으로만 응답하세요:
+
+문서 내용: "저는 컴퓨터 과학을 전공한 개발자입니다. Python과 JavaScript에 능숙하며, 웹 개발 경험이 3년 있습니다."
+사용자 의도: 면접 준비
+
+다음 형식의 JSON만 출력하세요:
 {
     "document_type": "문서 유형",
     "keywords": ["키워드1", "키워드2"],
+    "main_topics": ["주제1", "주제2"],
     "summary": "요약",
-    "recommendations": ["추천사항1"]
+    "recommendations": ["추천사항1"],
+    "interview_questions": ["질문1", "질문2"]
 }"""
                 
                 analysis_response = await client.post(
@@ -82,10 +91,11 @@ async def test_lmstudio_connection():
                     json={
                         "model": settings.LMSTUDIO_MODEL,
                         "messages": [
-                            {"role": "user", "content": analysis_prompt}
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
                         ],
-                        "temperature": 0.3,
-                        "max_tokens": 500,
+                        "temperature": 0.1,
+                        "max_tokens": 800,
                         "stream": False
                     },
                     timeout=30.0
@@ -97,13 +107,35 @@ async def test_lmstudio_connection():
                     print("✅ 문서 분석 형식 테스트 성공!")
                     print(f"분석 응답: {analysis_text[:200]}...")
                     
-                    # JSON 파싱 테스트
+                    # JSON 파싱 테스트 (개선된 추출 로직 사용)
                     try:
-                        json.loads(analysis_text)
-                        print("✅ JSON 파싱 성공!")
+                        # 1. 마크다운 코드 블록에서 JSON 추출 시도
+                        import re
+                        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', analysis_text, re.DOTALL)
+                        if json_match:
+                            json_str = json_match.group(1)
+                            result = json.loads(json_str)
+                            print("✅ JSON 파싱 성공! (마크다운 코드 블록에서 추출)")
+                        else:
+                            # 2. 중괄호로 둘러싸인 JSON 찾기
+                            brace_match = re.search(r'\{.*\}', analysis_text, re.DOTALL)
+                            if brace_match:
+                                json_str = brace_match.group(0)
+                                result = json.loads(json_str)
+                                print("✅ JSON 파싱 성공! (중괄호 패턴으로 추출)")
+                            else:
+                                # 3. 직접 JSON 파싱 시도
+                                result = json.loads(analysis_text)
+                                print("✅ JSON 파싱 성공! (직접 파싱)")
+                        
+                        print(f"📊 추출된 키워드: {result.get('keywords', [])}")
+                        print(f"📄 문서 유형: {result.get('document_type', 'Unknown')}")
+                        
                     except json.JSONDecodeError:
-                        print("⚠️  JSON 파싱 실패 - 모델이 정확한 JSON을 생성하지 못함")
-                        print("💡 모델에게 JSON 형식을 더 명확히 요청하거나 다른 모델을 사용해보세요.")
+                        print("⚠️  JSON 파싱 실패 - 모든 추출 방법 실패")
+                        print("💡 모델 설정을 확인하거나 다른 모델을 사용해보세요.")
+                        print(f"🔍 원본 응답 미리보기: {analysis_text[:300]}...")
+                        return False
                 
                 return True
             else:

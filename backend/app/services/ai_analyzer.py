@@ -243,8 +243,9 @@ JSON 형식으로만 응답해주세요."""
                 result_text = result_data.get("response", "")
                 
                 try:
-                    result = json.loads(result_text)
+                    result = self._extract_and_parse_json(result_text)
                 except json.JSONDecodeError:
+                    logger.warning(f"Ollama JSON 파싱 실패. 원본 응답: {result_text[:200]}...")
                     result = self.generate_local_analysis(text, user_intent)
                     result["analysis_method"] = "로컬 분석 (Ollama JSON 파싱 실패)"
                 
@@ -273,31 +274,37 @@ JSON 형식으로만 응답해주세요."""
             if not settings.LMSTUDIO_BASE_URL:
                 raise ValueError("LM Studio 설정이 없습니다")
             
-            system_prompt = """당신은 문서 분석 전문가입니다. 주어진 문서를 분석하여 다음 정보를 제공해주세요:
-1. 문서 유형 (이력서, 사전과제, 포트폴리오 등)
-2. 주요 키워드 10개
-3. 주요 주제들
-4. 문서 요약
-5. 추천사항
-6. 면접 시 예상 질문 (사용자 의도가 면접 준비인 경우)
+            system_prompt = """당신은 문서 분석 전문가입니다. 
+반드시 올바른 JSON 형식으로만 응답해야 합니다. 
+추가 설명이나 마크다운 형식 없이 순수한 JSON만 출력하세요.
 
-응답은 반드시 JSON 형식으로 해주세요."""
+응답 형식:
+{
+    "document_type": "문서 유형",
+    "keywords": ["키워드1", "키워드2", "키워드3"],
+    "main_topics": ["주제1", "주제2"],
+    "summary": "문서 요약",
+    "recommendations": ["추천1", "추천2"],
+    "interview_questions": ["질문1", "질문2"]
+}
 
-            user_prompt = f"""분석할 문서 내용:
-{text}
+IMPORTANT: 응답에는 JSON 이외의 다른 텍스트를 포함하지 마세요."""
 
+            user_prompt = f"""다음 문서를 분석하고 JSON 형식으로만 응답하세요:
+
+문서 내용: {text}
 사용자 의도: {user_intent}
 추가 컨텍스트: {additional_context}
 
-위 문서를 분석하여 다음 형식의 JSON으로 결과를 제공해주세요:
-{{
-    "document_type": "문서 유형",
-    "keywords": ["키워드1", "키워드2", ...],
-    "main_topics": ["주제1", "주제2", ...],
-    "summary": "문서 요약",
-    "recommendations": ["추천1", "추천2", ...],
-    "interview_questions": ["질문1", "질문2", ...]
-}}"""
+분석 요구사항:
+1. document_type: 문서 유형 분류
+2. keywords: 주요 키워드 5-10개 추출
+3. main_topics: 주요 주제 3-5개
+4. summary: 문서 요약 (2-3문장)
+5. recommendations: 추천사항 2-3개
+6. interview_questions: 면접 질문 3-5개 (면접 준비 의도인 경우)
+
+JSON만 출력하세요:"""
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -308,8 +315,8 @@ JSON 형식으로만 응답해주세요."""
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}
                         ],
-                        "temperature": 0.7,
-                        "max_tokens": 2000,
+                        "temperature": 0.1,
+                        "max_tokens": 1500,
                         "stream": False
                     },
                     timeout=60.0
@@ -320,11 +327,12 @@ JSON 형식으로만 응답해주세요."""
                 result_text = result_data["choices"][0]["message"]["content"]
                 
                 try:
-                    # JSON 파싱 시도
-                    result = json.loads(result_text)
+                    # JSON 추출 및 파싱 시도
+                    result = self._extract_and_parse_json(result_text)
                     result["analysis_method"] = "LM Studio 로컬 분석"
                 except json.JSONDecodeError:
                     # JSON 파싱 실패 시 로컬 분석으로 fallback
+                    logger.warning(f"LM Studio JSON 파싱 실패. 원본 응답: {result_text[:200]}...")
                     result = self.generate_local_analysis(text, user_intent)
                     result["analysis_method"] = "로컬 분석 (LM Studio JSON 파싱 실패)"
                 
@@ -505,6 +513,35 @@ JSON 형식으로만 응답해주세요."""
             logger.error(f"DeepSeek 분석 중 오류: {e}")
             raise
     
+    def _extract_and_parse_json(self, text: str) -> Dict[str, Any]:
+        """텍스트에서 JSON 추출 및 파싱 (마크다운 코드 블록 등 처리)"""
+        # 1. 마크다운 코드 블록에서 JSON 추출 시도
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+        
+        # 2. 중괄호로 둘러싸인 JSON 찾기
+        brace_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if brace_match:
+            json_str = brace_match.group(0)
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+        
+        # 3. 직접 JSON 파싱 시도
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        
+        # 4. 모든 시도 실패 시 예외 발생
+        raise json.JSONDecodeError("JSON 추출 실패", text, 0)
+
     def _parse_text_response(self, text: str) -> Dict[str, Any]:
         """텍스트 응답을 기본 JSON 구조로 파싱"""
         return {
