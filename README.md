@@ -80,6 +80,8 @@ cp frontend/.env.example frontend/.env
 ```bash
 ./run.sh
 ```
+<img width="474" height="760" alt="image" src="https://github.com/user-attachments/assets/95ec6939-7f69-460a-a2f3-484ca36fb838" />
+
 
 **개별 실행:**
 ```bash
