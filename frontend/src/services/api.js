@@ -38,7 +38,7 @@ api.interceptors.response.use(
 // API 서비스 함수들
 export const documentService = {
   // 문서 업로드
-  uploadDocuments: async (files, userIntent = '') => {
+  uploadDocuments: async (files, userIntent = '', documentTypes = {}) => {
     const formData = new FormData();
     
     // 파일들 추가
@@ -49,6 +49,11 @@ export const documentService = {
     // 사용자 의도 추가
     if (userIntent) {
       formData.append('user_intent', userIntent);
+    }
+    
+    // 문서 유형 추가 (면접 준비일 때만)
+    if (userIntent === '면접 준비' && Object.keys(documentTypes).length > 0) {
+      formData.append('document_types', JSON.stringify(documentTypes));
     }
     
     const response = await api.post('/api/documents/upload', formData, {

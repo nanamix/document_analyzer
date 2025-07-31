@@ -17,16 +17,29 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 async def upload_documents(
     files: List[UploadFile] = File(..., description="업로드할 파일들"),
     user_intent: Optional[str] = Form(None, description="사용자 의도"),
+    document_types: Optional[str] = Form(None, description="문서 유형들 (JSON 문자열)"),
     db: Session = Depends(get_db)
 ):
     """문서 업로드 API"""
     try:
         uploaded_documents = []
         
-        for file in files:
-            # 파일 내용 읽기
-            file_content = await file.read()
-            file_size = len(file_content)
+        # 문서 유형 파싱
+        document_types_dict = {}
+        if document_types:
+            try:
+                document_types_dict = json.loads(document_types)
+            except json.JSONDecodeError:
+                logger.warning("문서 유형 JSON 파싱 실패")
+        
+        for i, file in enumerate(files):
+            # 파일 내용 읽기 (multipart 경고 방지)
+            try:
+                file_content = await file.read()
+                file_size = len(file_content)
+            except Exception as e:
+                logger.warning(f"파일 읽기 중 경고 (무시됨): {e}")
+                continue
             
             # 파일 유효성 검사
             document_processor.validate_file(file.filename, file_size)
@@ -45,6 +58,9 @@ async def upload_documents(
                 logger.warning(f"텍스트 추출 실패: {e}")
                 extracted_text = ""
             
+            # 사용자 지정 문서 유형 가져오기
+            user_document_type = document_types_dict.get(str(i), None)
+            
             # 문서 정보 DB 저장
             db_document = Document(
                 filename=unique_filename,
@@ -54,7 +70,8 @@ async def upload_documents(
                 file_extension=file_extension,
                 file_size=file_size,
                 extracted_text=extracted_text,
-                user_intent=user_intent
+                user_intent=user_intent,
+                user_document_type=user_document_type
             )
             
             db.add(db_document)
@@ -160,13 +177,19 @@ async def analyze_documents(
         if is_external_ai:
             logger.warning(f"⚠️ 외부 AI 사용: {request.ai_model} - 사용자 동의: {request.user_consent}")
         
+        # 사용자 지정 문서 유형 수집
+        user_document_types = []
+        for doc in documents:
+            user_document_types.append(doc.user_document_type)
+        
         # AI 분석 수행
         analysis_result = await ai_analyzer.analyze_documents(
             texts=texts,
             user_intent=request.user_intent,
             ai_model=request.ai_model or "local",  # 기본값: 로컬
             additional_context=request.additional_context or "",
-            user_consent=request.user_consent
+            user_consent=request.user_consent,
+            user_document_types=user_document_types
         )
         
         # 분석 결과를 첫 번째 문서에 저장 (대표 문서)

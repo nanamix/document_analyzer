@@ -22,6 +22,7 @@ class Document(Base):
     keywords = Column(JSON)  # 추출된 키워드들
     analysis_result = Column(JSON)  # AI 분석 결과
     user_intent = Column(String)  # 사용자 의도 (예: 면접 준비)
+    user_document_type = Column(String)  # 사용자가 지정한 문서 유형 (이력서, 사전과제, 포트폴리오 등)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -32,6 +33,7 @@ class DocumentBase(BaseModel):
     file_type: str
     file_extension: str
     user_intent: Optional[str] = None
+    user_document_type: Optional[str] = None  # 사용자가 지정한 문서 유형
 
 class DocumentCreate(DocumentBase):
     """문서 생성 모델"""
@@ -45,6 +47,7 @@ class DocumentResponse(DocumentBase):
     extracted_text: Optional[str] = None
     keywords: Optional[List[str]] = None
     analysis_result: Optional[Dict[str, Any]] = None
+    user_document_type: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     

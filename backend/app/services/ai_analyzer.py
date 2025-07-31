@@ -554,12 +554,19 @@ JSON 형식으로만 응답해주세요."""
             "analysis_method": "텍스트 파싱"
         }
     
-    def _classify_document_types(self, texts: List[str]) -> List[str]:
-        """여러 문서의 유형을 각각 분류"""
+    def _classify_document_types(self, texts: List[str], user_document_types: List[str] = None) -> List[str]:
+        """여러 문서의 유형을 각각 분류 (사용자 지정 우선)"""
         doc_types = []
-        for text in texts:
-            doc_type = self.classify_document_type(text)
-            doc_types.append(doc_type)
+        
+        for i, text in enumerate(texts):
+            # 사용자가 지정한 문서 유형이 있으면 우선 사용
+            if user_document_types and i < len(user_document_types) and user_document_types[i]:
+                doc_types.append(user_document_types[i])
+            else:
+                # 자동 분류 사용
+                doc_type = self.classify_document_type(text)
+                doc_types.append(doc_type)
+        
         return doc_types
 
     def _generate_comprehensive_analysis(self, texts: List[str], doc_types: List[str], user_intent: str) -> Dict[str, Any]:
@@ -777,11 +784,12 @@ JSON 형식으로만 응답해주세요."""
                               user_intent: str, 
                               ai_model: str = "local",
                               additional_context: str = "",
-                              user_consent: bool = False) -> Dict[str, Any]:
+                              user_consent: bool = False,
+                              user_document_types: List[str] = None) -> Dict[str, Any]:
         """여러 문서 통합 분석 (보안 우선) - 면접 준비 특화"""
         try:
-            # 문서 유형 분류
-            doc_types = self._classify_document_types(texts)
+            # 문서 유형 분류 (사용자 지정 우선)
+            doc_types = self._classify_document_types(texts, user_document_types)
             
             # 텍스트 결합 (항상 정의)
             combined_text = "\n\n=== 문서 구분 ===\n\n".join(texts)

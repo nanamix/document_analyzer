@@ -13,6 +13,9 @@ from app.api.documents import router as documents_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# multipart 경고 숨기기
+logging.getLogger("python_multipart.multipart").setLevel(logging.ERROR)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 생명주기 관리"""
@@ -92,5 +95,7 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=True,
-        log_level="info"
+        log_level="info",
+        # multipart 경고 해결을 위한 추가 설정
+        access_log=True
     ) 

@@ -32,17 +32,19 @@ const DocumentUpload = () => {
   const [userIntent, setUserIntent] = useState('면접 준비');
   const [additionalContext, setAdditionalContext] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [documentTypes, setDocumentTypes] = useState({}); // 문서 유형 상태
   
   const queryClient = useQueryClient();
 
   // 파일 업로드 뮤테이션
   const uploadMutation = useMutation(
-    ({ files, userIntent }) => documentService.uploadDocuments(files, userIntent),
+    ({ files, userIntent, documentTypes }) => documentService.uploadDocuments(files, userIntent, documentTypes),
     {
       onSuccess: (data) => {
         message.success(`${data.length}개 문서가 성공적으로 업로드되었습니다!`);
         setFiles([]);
         setUploadProgress(0);
+        setDocumentTypes({});
         queryClient.invalidateQueries('documents');
       },
       onError: (error) => {
@@ -89,6 +91,12 @@ const DocumentUpload = () => {
   // 파일 제거
   const removeFile = (index) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
+    // 문서 유형도 함께 제거
+    setDocumentTypes(prev => {
+      const newTypes = { ...prev };
+      delete newTypes[index];
+      return newTypes;
+    });
   };
 
   // 업로드 실행
@@ -108,7 +116,8 @@ const DocumentUpload = () => {
     try {
       await uploadMutation.mutateAsync({ 
         files, 
-        userIntent: userIntent.trim()
+        userIntent: userIntent.trim(),
+        documentTypes
       });
     } catch (error) {
       console.error('Upload error:', error);
@@ -189,7 +198,31 @@ const DocumentUpload = () => {
                         {getFileTypeTag(file)}
                       </Space>
                     }
-                    description={formatFileSize(file.size)}
+                    description={
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Text type="secondary">{formatFileSize(file.size)}</Text>
+                        {/* 면접 준비일 때만 문서 유형 선택 표시 */}
+                        {userIntent === '면접 준비' && (
+                          <div>
+                            <Text strong style={{ fontSize: '12px' }}>문서 유형:</Text>
+                            <Select
+                              size="small"
+                              style={{ width: 150, marginLeft: 8 }}
+                              placeholder="문서 유형 선택"
+                              value={documentTypes[index] || ''}
+                              onChange={(value) => setDocumentTypes(prev => ({ ...prev, [index]: value }))}
+                            >
+                              <Option value="이력서">📄 이력서</Option>
+                              <Option value="자기소개서">📝 자기소개서</Option>
+                              <Option value="사전과제">📋 사전과제</Option>
+                              <Option value="포트폴리오">🎨 포트폴리오</Option>
+                              <Option value="논문/연구자료">📚 논문/연구자료</Option>
+                              <Option value="기타">📎 기타</Option>
+                            </Select>
+                          </div>
+                        )}
+                      </Space>
+                    }
                   />
                 </List.Item>
               )}
