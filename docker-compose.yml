@@ -1,0 +1,148 @@
+version: "3.8"
+
+services:
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:15-alpine
+    container_name: document_analyzer_db
+    environment:
+      POSTGRES_DB: document_analyzer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - document_analyzer_network
+
+  # 백엔드 API 서버
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: document_analyzer_backend
+    environment:
+      # 데이터베이스 설정
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-securepassword123}@db:5432/document_analyzer
+
+      # 서버 설정
+      ENVIRONMENT: production
+      DEBUG: false
+      HOST: 0.0.0.0
+      PORT: 4000
+
+      # 보안 설정
+      ENABLE_EXTERNAL_AI: ${ENABLE_EXTERNAL_AI:-false}
+      REQUIRE_EXPLICIT_CONSENT: ${REQUIRE_EXPLICIT_CONSENT:-true}
+      ENABLE_DATA_MASKING: ${ENABLE_DATA_MASKING:-true}
+      DEFAULT_AI_MODEL: ${DEFAULT_AI_MODEL:-local}
+
+      # AI API Keys (선택적)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+
+      # 파일 업로드 설정
+      UPLOAD_DIR: /app/uploads
+      MAX_FILE_SIZE: 50000000
+
+      # OCR 설정
+      TESSERACT_CMD: /usr/bin/tesseract
+
+      # Ollama 설정
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama2}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - document_analyzer_network
+
+  # 프론트엔드 (Nginx + React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: document_analyzer_frontend
+    environment:
+      REACT_APP_API_URL: /api
+    ports:
+      - "80:80"
+      - "443:443" # HTTPS용 (SSL 인증서 추가 시)
+    depends_on:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost/",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - document_analyzer_network
+
+  # Ollama (선택적 로컬 AI)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: document_analyzer_ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - document_analyzer_network
+    # GPU 지원 (NVIDIA GPU가 있는 경우)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  document_analyzer_network:
+    driver: bridge
