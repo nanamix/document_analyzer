@@ -280,6 +280,80 @@ const AnalysisResults = () => {
           </Card>
         </Col>
 
+        {/* 문서별 분석 결과 */}
+        {analysis.document_analysis && Object.keys(analysis.document_analysis).length > 0 && (
+          <Col xs={24}>
+            <Card
+              title={
+                <Space>
+                  <FileTextOutlined style={{ color: '#722ed1' }} />
+                  <span>문서별 분석 결과</span>
+                </Space>
+              }
+              size="small"
+            >
+              <Row gutter={[16, 16]}>
+                {Object.entries(analysis.document_analysis).map(([docKey, docData]) => (
+                  <Col xs={24} md={12} lg={8} key={docKey}>
+                    <Card size="small" style={{ height: '100%' }}>
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Title level={5} style={{ margin: 0, color: '#722ed1' }}>
+                          {docKey} ({docData.type})
+                        </Title>
+                        <div>
+                          <Text strong>키워드: </Text>
+                          {docData.keywords?.map((keyword, idx) => (
+                            <Tag key={idx} size="small" color="purple">
+                              {keyword}
+                            </Tag>
+                          ))}
+                        </div>
+                        <div>
+                          <Text strong>요약: </Text>
+                          <Paragraph 
+                            ellipsis={{ rows: 3, expandable: true, symbol: '더보기' }}
+                            style={{ margin: 0, fontSize: '12px' }}
+                          >
+                            {docData.summary}
+                          </Paragraph>
+                        </div>
+                      </Space>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            </Card>
+          </Col>
+        )}
+
+        {/* 문서 간 연관성 */}
+        {analysis.document_relationships && Object.keys(analysis.document_relationships).length > 0 && (
+          <Col xs={24}>
+            <Card
+              title={
+                <Space>
+                  <BookOutlined style={{ color: '#fa8c16' }} />
+                  <span>문서 간 연관성 분석</span>
+                </Space>
+              }
+              size="small"
+            >
+              <List
+                dataSource={Object.entries(analysis.document_relationships)}
+                renderItem={([relationship, description]) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={<BookOutlined style={{ color: '#fa8c16' }} />}
+                      title={<Text strong>{relationship}</Text>}
+                      description={description}
+                    />
+                  </List.Item>
+                )}
+              />
+            </Card>
+          </Col>
+        )}
+
         {/* 면접 예상 질문 */}
         {analysis.interview_questions && analysis.interview_questions.length > 0 && (
           <Col xs={24}>
@@ -288,6 +362,9 @@ const AnalysisResults = () => {
                 <Space>
                   <QuestionCircleOutlined style={{ color: '#f5222d' }} />
                   <span>면접 예상 질문</span>
+                  {analysis.total_documents > 1 && (
+                    <Tag color="blue">종합 분석</Tag>
+                  )}
                 </Space>
               }
               size="small"

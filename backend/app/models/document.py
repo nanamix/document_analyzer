@@ -60,6 +60,10 @@ class DocumentAnalysis(BaseModel):
     analysis_summary: str
     recommendations: List[str]
     interview_questions: Optional[List[str]] = None
+    document_analysis: Optional[Dict[str, Any]] = None  # 각 문서별 세부 분석
+    document_relationships: Optional[Dict[str, str]] = None  # 문서 간 연관성
+    total_documents: Optional[int] = None  # 총 문서 수
+    analysis_method: Optional[str] = None  # 분석 방법
 
 class AnalysisRequest(BaseModel):
     """분석 요청 모델"""

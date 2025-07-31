@@ -189,7 +189,11 @@ async def analyze_documents(
             document_type=analysis_data.get("document_type", "문서"),
             analysis_summary=analysis_data.get("summary", ""),
             recommendations=analysis_data.get("recommendations", []),
-            interview_questions=analysis_data.get("interview_questions", [])
+            interview_questions=analysis_data.get("interview_questions", []),
+            document_analysis=analysis_data.get("document_analysis", {}),
+            document_relationships=analysis_data.get("document_relationships", {}),
+            total_documents=analysis_data.get("total_documents", len(documents)),
+            analysis_method=analysis_data.get("analysis_method", "기본 분석")
         )
         
         logger.info(f"✅ 문서 분석 완료: {len(documents)}개 문서, 보안 수준: {security_level}")

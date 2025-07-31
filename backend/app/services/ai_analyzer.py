@@ -554,16 +554,253 @@ JSON 형식으로만 응답해주세요."""
             "analysis_method": "텍스트 파싱"
         }
     
+    def _classify_document_types(self, texts: List[str]) -> List[str]:
+        """여러 문서의 유형을 각각 분류"""
+        doc_types = []
+        for text in texts:
+            doc_type = self.classify_document_type(text)
+            doc_types.append(doc_type)
+        return doc_types
+
+    def _generate_comprehensive_analysis(self, texts: List[str], doc_types: List[str], user_intent: str) -> Dict[str, Any]:
+        """면접 준비를 위한 종합 분석"""
+        try:
+            # 전체 텍스트 통합
+            combined_text = "\n\n".join(texts)
+            
+            # 각 문서별 키워드 추출
+            all_keywords = []
+            for text in texts:
+                keywords = self.extract_keywords(text, 8)
+                all_keywords.extend(keywords)
+            
+            # 중복 제거 및 빈도순 정렬
+            from collections import Counter
+            keyword_counts = Counter(all_keywords)
+            top_keywords = [word for word, count in keyword_counts.most_common(15)]
+            
+            # 문서 유형별 분석
+            doc_analysis = {}
+            for i, (text, doc_type) in enumerate(zip(texts, doc_types)):
+                doc_analysis[f"문서{i+1}"] = {
+                    "type": doc_type,
+                    "keywords": self.extract_keywords(text, 5),
+                    "summary": text[:200] + "..." if len(text) > 200 else text
+                }
+            
+            # 면접 준비 특화 분석
+            if user_intent == "면접 준비":
+                recommendations = self._generate_interview_recommendations(doc_types, top_keywords)
+                interview_questions = self._generate_comprehensive_interview_questions(doc_types, top_keywords, texts)
+            else:
+                recommendations = [
+                    "문서들의 주요 키워드를 파악했습니다",
+                    "문서 간 연관성을 검토해보세요",
+                    "핵심 내용을 요약하여 정리하세요"
+                ]
+                interview_questions = []
+            
+            # 문서 간 연관성 분석
+            relationships = self._analyze_document_relationships(doc_types)
+            
+            return {
+                "document_type": f"다중문서 ({', '.join(set(doc_types))})",
+                "keywords": top_keywords,
+                "main_topics": list(set([kw for kw in top_keywords[:5]])),
+                "summary": self._generate_multi_document_summary(texts, doc_types),
+                "recommendations": recommendations,
+                "interview_questions": interview_questions,
+                "document_analysis": doc_analysis,
+                "document_relationships": relationships,
+                "total_documents": len(texts),
+                "analysis_method": "종합 다중 문서 분석"
+            }
+            
+        except Exception as e:
+            logger.error(f"종합 분석 중 오류: {e}")
+            # 기본 분석으로 fallback
+            combined_text = "\n\n=== 문서 구분 ===\n\n".join(texts)
+            return self.generate_local_analysis(combined_text, user_intent)
+
+    def _generate_interview_recommendations(self, doc_types: List[str], keywords: List[str]) -> List[str]:
+        """면접 준비 추천사항 생성"""
+        recommendations = []
+        
+        # 문서 유형별 추천사항
+        if "이력서" in doc_types:
+            recommendations.append("이력서의 모든 경험에 대해 구체적인 사례와 성과를 준비하세요")
+            recommendations.append("경력 중 가장 도전적이었던 프로젝트와 극복 과정을 설명할 수 있도록 준비하세요")
+        
+        if "사전과제" in doc_types:
+            recommendations.append("사전과제의 핵심 기술과 설계 결정에 대한 근거를 명확히 설명할 수 있어야 합니다")
+            recommendations.append("과제에서 사용한 기술 스택의 장단점과 대안에 대해 생각해보세요")
+        
+        if "포트폴리오" in doc_types:
+            recommendations.append("포트폴리오의 각 프로젝트별 기술적 도전과 해결책을 정리하세요")
+            recommendations.append("프로젝트의 비즈니스 임팩트와 개선사항을 구체적으로 준비하세요")
+        
+        # 키워드 기반 추천사항
+        tech_keywords = [kw for kw in keywords if any(tech in kw.lower() for tech in 
+                        ['python', 'javascript', 'react', 'node', 'sql', 'aws', 'docker', 'git'])]
+        
+        if tech_keywords:
+            recommendations.append(f"주요 기술 스택({', '.join(tech_keywords[:3])})에 대한 심화 질문을 준비하세요")
+        
+        # 기본 추천사항
+        recommendations.extend([
+            "자기소개를 1분, 3분, 5분 버전으로 각각 준비하세요",
+            "지원 동기와 회사에 대한 이해도를 명확히 표현할 수 있어야 합니다",
+            "향후 커리어 계획과 성장 목표를 구체적으로 준비하세요"
+        ])
+        
+        return recommendations[:8]  # 최대 8개
+
+    def _generate_comprehensive_interview_questions(self, doc_types: List[str], keywords: List[str], texts: List[str]) -> List[str]:
+        """종합적인 면접 예상 질문 생성"""
+        questions = []
+        
+        # 자기소개 관련
+        questions.append("간단하게 자기소개를 해주세요")
+        questions.append("지원 동기와 우리 회사를 선택한 이유를 말씀해주세요")
+        
+        # 문서별 특화 질문
+        if "이력서" in doc_types:
+            if keywords:
+                questions.append(f"{keywords[0]}에 대한 경험을 구체적으로 설명해주세요")
+            questions.append("가장 자랑스러운 프로젝트나 성과는 무엇인가요?")
+            questions.append("팀에서 갈등이 있었던 경험과 해결 방법을 말씀해주세요")
+        
+        if "사전과제" in doc_types:
+            questions.append("사전과제에서 가장 어려웠던 부분과 해결 과정을 설명해주세요")
+            questions.append("과제에서 사용한 기술을 선택한 이유는 무엇인가요?")
+            questions.append("과제를 다시 한다면 어떤 부분을 개선하고 싶나요?")
+        
+        if "포트폴리오" in doc_types:
+            questions.append("포트폴리오에서 가장 기술적으로 도전적이었던 프로젝트는 무엇인가요?")
+            questions.append("프로젝트의 성과를 어떻게 측정했나요?")
+        
+        # 기술 관련 질문
+        tech_keywords = [kw for kw in keywords[:5] if len(kw) > 2]
+        for tech in tech_keywords[:2]:
+            questions.append(f"{tech}의 장단점과 사용 경험을 설명해주세요")
+        
+        # 일반적인 질문
+        questions.extend([
+            "개발자로서 가장 중요하게 생각하는 가치는 무엇인가요?",
+            "새로운 기술을 학습하는 본인만의 방법이 있나요?",
+            "5년 후 본인의 모습을 어떻게 그리고 있나요?",
+            "우리 팀에서 어떤 기여를 할 수 있을까요?",
+            "마지막으로 궁금한 점이나 하고 싶은 말씀이 있나요?"
+        ])
+        
+        return questions[:15]  # 최대 15개
+
+    def _analyze_document_relationships(self, doc_types: List[str]) -> Dict[str, str]:
+        """문서 간 연관성 분석"""
+        relationships = {}
+        
+        unique_types = list(set(doc_types))
+        
+        if len(unique_types) > 1:
+            if "이력서" in unique_types and "사전과제" in unique_types:
+                relationships["이력서-사전과제"] = "이력서의 경험이 사전과제 해결에 어떻게 활용되었는지 연결지어 설명할 수 있어야 합니다"
+            
+            if "이력서" in unique_types and "포트폴리오" in unique_types:
+                relationships["이력서-포트폴리오"] = "이력서의 경력과 포트폴리오 프로젝트의 연관성을 강조하여 일관된 스토리를 만드세요"
+            
+            if "사전과제" in unique_types and "포트폴리오" in unique_types:
+                relationships["사전과제-포트폴리오"] = "포트폴리오의 경험이 사전과제 접근 방식에 어떤 영향을 주었는지 설명하세요"
+        
+        return relationships
+
+    def _generate_multi_document_summary(self, texts: List[str], doc_types: List[str]) -> str:
+        """다중 문서 종합 요약"""
+        summary_parts = []
+        
+        # 문서 개수와 유형
+        summary_parts.append(f"총 {len(texts)}개의 문서가 분석되었습니다.")
+        
+        # 문서 유형별 요약
+        type_counts = {}
+        for doc_type in doc_types:
+            type_counts[doc_type] = type_counts.get(doc_type, 0) + 1
+        
+        type_summary = ", ".join([f"{dtype} {count}개" for dtype, count in type_counts.items()])
+        summary_parts.append(f"문서 구성: {type_summary}")
+        
+        # 종합 평가
+        if "이력서" in doc_types and "사전과제" in doc_types:
+            summary_parts.append("이력서와 사전과제가 함께 제출되어 지원자의 역량을 종합적으로 평가할 수 있습니다.")
+        
+        return " ".join(summary_parts)
+
+    def _create_structured_prompt(self, texts: List[str], doc_types: List[str], user_intent: str, additional_context: str) -> str:
+        """AI 모델용 구조화된 프롬프트 생성"""
+        prompt_parts = []
+        
+        # 헤더
+        prompt_parts.append("=== 다중 문서 종합 분석 요청 ===")
+        prompt_parts.append(f"분석 목적: {user_intent}")
+        prompt_parts.append(f"문서 개수: {len(texts)}개")
+        prompt_parts.append(f"문서 유형: {', '.join(doc_types)}")
+        
+        if additional_context:
+            prompt_parts.append(f"추가 컨텍스트: {additional_context}")
+        
+        prompt_parts.append("")
+        
+        # 각 문서별 구분
+        for i, (text, doc_type) in enumerate(zip(texts, doc_types)):
+            prompt_parts.append(f"=== 문서 {i+1}: {doc_type} ===")
+            prompt_parts.append(text)
+            prompt_parts.append("")
+        
+        # 분석 요청사항
+        prompt_parts.append("=== 분석 요청사항 ===")
+        if user_intent == "면접 준비":
+            prompt_parts.append("면접 준비를 위한 종합 분석을 수행해주세요:")
+            prompt_parts.append("1. 각 문서별 핵심 내용 파악")
+            prompt_parts.append("2. 문서들 간의 연관성 분석")
+            prompt_parts.append("3. 통합된 키워드 추출")
+            prompt_parts.append("4. 면접 예상 질문 생성 (문서별 + 종합)")
+            prompt_parts.append("5. 면접 준비 전략 제시")
+        else:
+            prompt_parts.append("다중 문서 종합 분석을 수행해주세요:")
+            prompt_parts.append("1. 각 문서의 주요 내용")
+            prompt_parts.append("2. 공통 키워드 및 주제")
+            prompt_parts.append("3. 문서들의 전체적인 관점")
+        
+        return "\n".join(prompt_parts)
+
     async def analyze_documents(self, 
                               texts: List[str], 
                               user_intent: str, 
                               ai_model: str = "local",
                               additional_context: str = "",
                               user_consent: bool = False) -> Dict[str, Any]:
-        """여러 문서 통합 분석 (보안 우선)"""
+        """여러 문서 통합 분석 (보안 우선) - 면접 준비 특화"""
         try:
-            # 모든 텍스트 합치기
-            combined_text = "\n\n=== 문서 구분 ===\n\n".join(texts)
+            # 문서 유형 분류
+            doc_types = self._classify_document_types(texts)
+            
+            # 면접 준비나 다중 문서인 경우 종합 분석 수행
+            if user_intent == "면접 준비" or len(texts) > 1:
+                logger.info(f"🎯 종합 분석 시작: {len(texts)}개 문서, 유형: {doc_types}")
+                
+                # 🔒 보안 우선 분석 with 종합 분석
+                if ai_model == "local" or ai_model == "basic":
+                    analysis_result = self._generate_comprehensive_analysis(texts, doc_types, user_intent)
+                    result = {
+                        "ai_model": "local",
+                        "analysis": analysis_result,
+                        "raw_response": "종합 로컬 분석 수행"
+                    }
+                else:
+                    # AI 모델 사용 시에도 종합 분석 프롬프트 적용
+                    combined_text = self._create_structured_prompt(texts, doc_types, user_intent, additional_context)
+            else:
+                # 단일 문서 또는 기본 분석
+                combined_text = "\n\n=== 문서 구분 ===\n\n".join(texts)
             
             # 🔒 보안 우선 분석 순서
             if ai_model == "local" or ai_model == "basic":
