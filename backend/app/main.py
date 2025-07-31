@@ -35,7 +35,10 @@ app = FastAPI(
     title="Document Analyzer API",
     description="AI를 활용한 문서 분석 시스템",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    # multipart 경고 해결을 위한 설정
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # CORS 미들웨어 설정

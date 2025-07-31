@@ -77,8 +77,10 @@ class DocumentProcessor:
                     for page in pdf_reader.pages:
                         text_content += page.extract_text() + "\n"
             
-            logger.info(f"PDF 텍스트 추출 완료: {len(text_content)} 문자")
-            return text_content.strip()
+            # 텍스트 정리 (불필요한 공백 제거, 하지만 내용은 보존)
+            cleaned_text = text_content.strip()
+            logger.info(f"PDF 텍스트 추출 완료: {len(text_content)} 문자 -> 정리 후: {len(cleaned_text)} 문자")
+            return cleaned_text
             
         except Exception as e:
             logger.error(f"PDF 텍스트 추출 중 오류: {e}")
@@ -101,8 +103,10 @@ class DocumentProcessor:
                 config='--oem 3 --psm 6'
             )
             
-            logger.info(f"이미지 OCR 완료: {len(text_content)} 문자")
-            return text_content.strip()
+            # 텍스트 정리
+            cleaned_text = text_content.strip()
+            logger.info(f"이미지 OCR 완료: {len(text_content)} 문자 -> 정리 후: {len(cleaned_text)} 문자")
+            return cleaned_text
             
         except Exception as e:
             logger.error(f"이미지 OCR 중 오류: {e}")
@@ -110,7 +114,8 @@ class DocumentProcessor:
             try:
                 image = Image.open(file_path)
                 text_content = pytesseract.image_to_string(image, lang='eng')
-                return text_content.strip()
+                cleaned_text = text_content.strip()
+                return cleaned_text
             except:
                 raise e
     

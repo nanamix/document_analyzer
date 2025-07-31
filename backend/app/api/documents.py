@@ -15,8 +15,8 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 @router.post("/upload", response_model=List[DocumentResponse])
 async def upload_documents(
-    files: List[UploadFile] = File(...),
-    user_intent: Optional[str] = Form(None),
+    files: List[UploadFile] = File(..., description="업로드할 파일들"),
+    user_intent: Optional[str] = Form(None, description="사용자 의도"),
     db: Session = Depends(get_db)
 ):
     """문서 업로드 API"""
